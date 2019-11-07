@@ -241,6 +241,22 @@ a:hover, a:focus, a:active {
 	width: 40px;
 }
 
+.project .icon-holder > img.iconL0 {
+	width: 10px;
+}
+
+.project .icon-holder > img.iconL1 {
+	width: 50%;
+}
+
+.project .icon-holder > img.iconL2 {
+	width: 75%;
+}
+
+.project .icon-holder > img.iconL3 {
+	width: 90%;
+}
+
 .project:hover {
 	border-color: #00a8ff;
 }
