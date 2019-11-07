@@ -12,7 +12,7 @@
 
 /* stylize an author by idHal ('span' is required to leave the ',' unaffected) */
 
-.author#guillaume-touya span {
+.author#valerie-gouet-brunet span {
   text-decoration: underline;
 }
 
