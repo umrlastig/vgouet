@@ -1,6 +1,6 @@
 // The MIT License (MIT)
 
-// hal.js | Copyright (c) 2019-2020 IGN
+// hal.js | Copyright (c) 2019 IGN
 
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,72 +22,64 @@
 
 // documentation on HAL API: https://api.archives-ouvertes.fr/docs/search/?schema=fields#fields
 
-// sample usage :
-// fetchHal('mathieu-bredif',{producedDateY_i:"[2015 TO 2019]"},'ACL').then(console.log) // ACL entries between 2015 and 2019
-// fetchHal('mathieu-bredif',{producedDateY_i:2019},'ACTI').then(console.log) // ACTI entries of 2019
-// fetchHal('mathieu-bredif').then(console.log) // everything
-
-// Papers may be blacklisted (ie: ignored) by adding their hal-id as a string to this array
-var halIdBlacklist = halIdBlacklist || [];
-
-const pubKeyQueries = {
-  PV:  '&fq=popularLevel_s:1',
-  ASCL:'&fq=popularLevel_s:0&fq=docType_s:"ART"&fq=peerReviewing_s:0',
-  ACL: '&fq=popularLevel_s:0&fq=docType_s:"ART"&fq=peerReviewing_s:1&fq=audience_s:2',
-  ACLN:'&fq=popularLevel_s:0&fq=docType_s:"ART"&fq=peerReviewing_s:1&fq=audience_s:3',
-  INV: '&fq=popularLevel_s:0&fq=docType_s:"COMM"&fq=invitedCommunication_s:1',
-  COM: '&fq=popularLevel_s:0&fq=docType_s:"COMM"&fq=invitedCommunication_s:0&fq=proceedings_s:0',
-  ACTI:'&fq=popularLevel_s:0&fq=docType_s:"COMM"&fq=invitedCommunication_s:0&fq=proceedings_s:1&fq=audience_s:2',
-  ACTN:'&fq=popularLevel_s:0&fq=docType_s:"COMM"&fq=invitedCommunication_s:0&fq=proceedings_s:1&fq=audience_s:3',
-  OS:  '&fq=popularLevel_s:0&fq=docType_s:"COUV"',
-  DO:  '&fq=popularLevel_s:0&fq=docType_s:"DOUV"',
-  AFF: '&fq=popularLevel_s:0&fq=docType_s:"POSTER"',
-  AP:  '&fq=docType_s:("REPORT" OR "UNDEFINED" OR "OTHER" OR "LECTURE")', // no popularLevel_s for REPORT and UNDEFINED
-  TH:  '&fq=docType_s:("THESE" OR "HDR")',        // no popularLevel_s for THESE and HDR
-};
-const pubKeys = Object.keys(pubKeyQueries);
-const noPubKeyInCommentQuery = '&fq=-comment_s:(' + pubKeys.join(' OR ') + ')';
-
-const halFields = 'fileAnnexesFigure_s,invitedCommunication_s,proceedings_s,peerReviewing_s,audience_s,comment_s,popularLevel_s,halId_s,authIdHalFullName_fs,producedDateY_i,docType_s,files_s,fileMain_s,fileMainAnnex_s,linkExtUrl_s,title_s,en_title_s,fr_title_s,label_bibtex,citationRef_s';
-
-// private function
-function _fetchHal(authIdHal, pubKey, queries = {}){
-  var q = authIdHal ? "authIdHal_s:%22"+authIdHal+"%22" : "*";
-  if (pubKey) {
-	  if (!(pubKey in pubKeyQueries)) return Promise.reject(Error(pubKey + ' is not valid'));
-	  q += pubKeyQueries[pubKey] + noPubKeyInCommentQuery;
-  } 
-  Object.keys(queries).forEach(key => q += '&fq='+key+':'+queries[key]);
-  const url = "https://api.archives-ouvertes.fr/search/?q="+q+"&wt=json&rows=10000&fl="+halFields;
-  return fetch(url).then(x=>x.json()).then(x=>x.response.docs.sort((a, b) => b.producedDateY_i - a.producedDateY_i));
+var halApi = function(halId){
+  const fl = 'fileAnnexesFigure_s,invitedCommunication_s,proceedings_s,popularLevel_s,halId_s,authIdHalFullName_fs,producedDateY_i,docType_s,files_s,fileMain_s,fileMainAnnex_s,linkExtUrl_s,title_s,en_title_s,fr_title_s,label_bibtex,citationRef_s';
+  return "https://api.archives-ouvertes.fr/search/?q=authIdHal_s:%22"+halId+"%22&wt=json&sort=producedDateY_i desc&rows=10000&fl="+fl;
 }
 
-function fetchHal(authIdHal, pubKey = '*', queries = {}) {
-	if (pubKey == '*') pubKey = undefined;
-	const q1 = _fetchHal(authIdHal, pubKey, queries);
-	if (!pubKey) return q1;
-	queries.comment_s = pubKey;
-	const q2 = _fetchHal(authIdHal, undefined, queries);
-	return Promise.all([q1,q2]).then(x=>x.flat());
+var getPublications = function(halId, parent, params){
+  if (!parent) return;
+
+  // Create a request variable and assign a new XMLHttpRequest object to it.
+  var request = new XMLHttpRequest();
+
+  // Open a new connection, using the GET request on the URL endpoint
+  var url = halApi(halId)+params;
+  // console.log(url);
+  request.open('GET', url, true);
+  request.onload = function () {
+    var docs = JSON.parse(this.response).response.docs;
+    // console.log(docs);
+    if(docs.length == 0) {
+      parent.hidden = true;
+    } else {
+      const ol = document.createElement('ol');
+      ol.setAttribute("class","sub");
+      docs.forEach(doc => createPub(doc, ol));
+      parent.appendChild(ol);
+    }
+  };
+  request.send();
+}
+
+const publication_options = {
+  pubPV:  "&fq=popularLevel_s:1",
+  pubASCL:"&fq=popularLevel_s:0&fq=docType_s:\"ART\"&fq=peerReviewing_s:0",
+  pubACL: "&fq=popularLevel_s:0&fq=docType_s:\"ART\"&fq=peerReviewing_s:1&fq=audience_s:2",
+  pubACLN:"&fq=popularLevel_s:0&fq=docType_s:\"ART\"&fq=peerReviewing_s:1&fq=audience_s:(NOT 2)",
+  pubINV: "&fq=popularLevel_s:0&fq=docType_s:\"COMM\"&fq=invitedCommunication_s:1",
+  pubCOM: "&fq=popularLevel_s:0&fq=docType_s:\"COMM\"&fq=invitedCommunication_s:0&fq=proceedings_s:0",
+  pubACTI:"&fq=popularLevel_s:0&fq=docType_s:\"COMM\"&fq=invitedCommunication_s:0&fq=proceedings_s:1&fq=audience_s:2",
+  pubACTN:"&fq=popularLevel_s:0&fq=docType_s:\"COMM\"&fq=invitedCommunication_s:0&fq=proceedings_s:1&fq=audience_s:(NOT 2)",
+  pubOS:  "&fq=popularLevel_s:0&fq=docType_s:\"COUV\"",
+  pubDO:  "&fq=popularLevel_s:0&fq=docType_s:\"DOUV\"",
+  pubAP:  "&fq=popularLevel_s:0&fq=docType_s:(\"REPORT\" OR \"UNDEFINED\")",
+  pubTH:  "&fq=popularLevel_s:0&fq=docType_s:(\"THESE\" OR \"HDR\")",
+  pubAFF: "&fq=popularLevel_s:0&fq=docType_s:\"POSTER\""
 }
 
 // based on http://production-scientifique.bnf.fr/Annexe/cadre-de-classement
-function getPubKey(doc) 
+function classement(doc) 
 {
-  if (pubKeys.includes(doc.comment_s)) return doc.comment_s;
   if (doc.popularLevel_s == 1) return 'PV';
   if (doc.docType_s == 'COUV') return 'OS';
   if (doc.docType_s == 'DOUV') return 'DO';
   if (doc.docType_s == 'POSTER') return 'AFF';
-  if (doc.docType_s == 'THESE') return 'TH';
-  if (doc.docType_s == 'HDR') return 'TH';
-  if (doc.docType_s == 'MEM') return 'AP';
-  if (doc.docType_s == 'REPORT') return 'AP';
-  if (doc.docType_s == 'UNDEFINED') return 'AP';
-  if (doc.docType_s == 'OTHER') return 'AP';
-  if (doc.docType_s == 'LECTURE') return 'AP';
+  if (doc.docType_s == 'THESE' || doc.docType_s == 'HDR') return 'TH';
+  if (doc.docType_s == 'REPORT' || doc.docType_s == 'UNDEFINED') return 'AP';
   if (doc.docType_s == 'COMM')
   {
+    console.log(doc);
     if (doc.invitedCommunication_s == 1) return 'INV';
     if (doc.proceedings_s == 0) return 'COM';
     if (doc.audience_s == 2) return 'ACTI';
@@ -99,30 +91,36 @@ function getPubKey(doc)
     if (doc.audience_s == 2) return 'ACL';
     return 'ACLN';
   }
-  throw new Error('unable to classify this document : ' + JSON.stringify(doc));
+  return '???';
 }
 
-var getPublications = function(authIdHal, pubKey, queries){
-  var ols = {};
-  pubKeys.forEach(function (key) {
-	  var parent = document.getElementById('pub'+key);
-	  if(!parent) return;
-      parent.hidden = true;
-	  while (parent.lastChild.tagName == 'OL') parent.removeChild(parent.lastChild);
-      const ol = document.createElement('ol');
-      ol.setAttribute("class","sub");
-      parent.appendChild(ol);
-	  ols[key] = ol;
-  });
-  fetchHal(authIdHal, pubKey, queries).then(function (docs) {
-    docs.forEach(function (doc) {
-      var key = getPubKey(doc, pubKeys);
-	  var ol = ols[key];
-	  if (!ol) return;
-      createPub(doc, ol, pubKeys)
-	  ol.parentElement.hidden = false;
-	});
-  });
+var getPublicationsAuthor = function(halId, options = publication_options)
+{
+  for (var id in options)
+    getPublications(halId, document.getElementById(id), options[id]);
+}
+
+var getKeywordPublicationsAuthor = function(halId, keyword, parent){
+  parent = document.getElementById(parent || "pub") || parent;
+  getPublications(halId, parent, "&fq=keyword_s:\""+keyword+"\"");
+}
+
+var getKeywordPublicationsAuthorYear = function(halId, keyword, year, parent){
+  parent = document.getElementById(parent || "pub") || parent;
+  getPublications(halId, parent, "&fq=keyword_s:\""+keyword+"\"&fq=producedDateY_i:"+year);
+}
+
+var getKeywordPublicationsAuthorStartYear = function(halId, keyword, startYear, parent, endYear){
+  parent = document.getElementById(parent || "pub") || parent;
+console.log(parent);
+  endYear = endYear || new Date().getFullYear();
+  for(year=endYear;year >= startYear;year--)
+  {
+	var divElement = document.createElement('div');
+	divElement.innerHTML = year;
+	const yearParentElement = parent.appendChild(divElement);
+        getKeywordPublicationsAuthorYear(halId, keyword, year, yearParentElement);
+  }
 }
 
 function parseCitation(doc, citationElement, linksElement)
@@ -181,15 +179,14 @@ function createBibtex(label_bibtex, parent)
   return spanElement;
 }
 
-var createPub = function(doc, parent, pubKeys){
+var createPub = function(doc, parent){
+  // console.log(doc);
   if (!parent) return;
-  if (halIdBlacklist.includes(doc.halId_s)) return;
-
   const listElement = document.createElement('li');
   listElement.setAttribute("class", "bib");
   listElement.setAttribute("id", doc.halId_s);
   const linksElement = document.createElement('span');
-  // listElement.innerHTML = '<b>'+doc.comment_s + getPubKey(doc, pubKeys)+'</b>';
+  // listElement.innerHTML = '<b>'+classement(doc)+'</b>';
 
   const authors = document.createElement('span');
   for(var i = 0; i < doc.authIdHalFullName_fs.length; ++i)
